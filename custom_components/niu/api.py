@@ -156,7 +156,59 @@ class NiuApi:
             return False
         return data
 
-    def getDataBatA(self, id_field): 
+    def action(self, cmd):
+        sn, token = self.sn, self.token
+        url = API_BASE_URL + CMD_API_URI
+        is_chinese = self.language.startswith("zh")
+        client_id = "Domestic" if is_chinese else "Overseas"
+        headers = {
+            "token": token,
+            "Accept-Language": self.language,
+            "user-agent": f"manager/4.10.4 (android; IN2020 11);lang={self.language};clientIdentifier={client_id};timezone={self.timezone};model=IN2020;deviceName=IN2020;ostype=android",
+        }
+        data = {"token": token, "sn": sn, "type": cmd}
+        try:
+            r = requests.post(url, headers=headers, data=data)
+        except ConnectionError:
+            return False
+        if r.status_code != 200:
+            return False
+        data = json.loads(r.content.decode())
+        if data["status"] != 0:
+            return False
+        return data
+
+    def wake_up(self):
+        """Wake up / unlock the scooter's electronics remotely (NIU calls this "ACC")."""
+        return self.action(CMD_ACC_ON)
+
+    def sleep(self):
+        """Power the scooter's electronics back down remotely."""
+        return self.action(CMD_ACC_OFF)
+
+    def is_acc_on(self):
+        try:
+            # NIU's API has been observed returning this as either a number or a numeric string.
+            return self.dataMoto["data"]["isAccOn"] in (1, "1", True)
+        except (KeyError, TypeError):
+            return False
+
+    def lock(self):
+        """Arm the scooter's anti-theft alarm (NIU calls this "fortification")."""
+        return self.action(CMD_FORTIFICATION_ON)
+
+    def unlock(self):
+        """Disarm the scooter's anti-theft alarm (NIU calls this "fortification")."""
+        return self.action(CMD_FORTIFICATION_OFF)
+
+    def is_fortified(self):
+        try:
+            # NIU's API has been observed returning this as either a number or a numeric string.
+            return self.dataMoto["data"]["isFortificationOn"] in (1, "1", True)
+        except (KeyError, TypeError):
+            return False
+
+    def getDataBatA(self, id_field):
         return self.dataBat["data"]["batteries"]["compartmentA"][id_field]
 
     def hasSecondBattery(self):

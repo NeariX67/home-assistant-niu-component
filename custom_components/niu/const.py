@@ -6,7 +6,13 @@ MOTOR_INDEX_API_URI = "/v5/scooter/motor_data/index_info"
 MOTOINFO_LIST_API_URI = "/v5/scooter/list"
 MOTOINFO_ALL_API_URI = "/motoinfo/overallTally"
 TRACK_LIST_API_URI = "/v5/track/list/v2"
+CMD_API_URI = "/v5/cmd/creat"
 # FIRMWARE_BAS_URL = '/motorota/getfirmwareversion'
+
+CMD_ACC_ON = "acc_on"
+CMD_ACC_OFF = "acc_off"
+CMD_FORTIFICATION_ON = "fortification_on"
+CMD_FORTIFICATION_OFF = "fortification_off"
 
 DOMAIN = "niu"
 CONF_USERNAME = "username"

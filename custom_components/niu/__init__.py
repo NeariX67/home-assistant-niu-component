@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # TODO List the platforms that you want to support.
 # For your initial PR, limit it to 1 platform.
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "switch", "lock"]
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Niu component."""

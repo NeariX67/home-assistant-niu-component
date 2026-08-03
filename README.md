@@ -5,6 +5,8 @@ This is a custom component for Home Assistant to integrate your Niu Scooter.
 Now this integration is _asynchronous_ and it is easy installable via config flow.
 
 ## Changes:
+* Added a lock entity that remotely arms/disarms the scooter's anti-theft alarm ("fortification" in Niu's API) — unlock to disarm, lock to arm.
+* Added a switch entity that remotely wakes up the scooter's electronics (turn on) or powers them back down (turn off), using the same cloud command the Niu app uses when out of Bluetooth range.
 * Now it will generate automatically a Niu device so all the sensors and the camera will grouped
 ![auto device](images/niu_integration_device.png)
 * If you select the Last track sensor automatically it will create a camera integration, with the rendered image of your last track.
