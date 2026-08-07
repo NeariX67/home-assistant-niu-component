@@ -154,7 +154,15 @@ class NiuSensor(Entity):
 
         elif self._sensor_grp == SENSOR_TYPE_MOTO:
             await self._hass.async_add_executor_job(self._api.updateMoto)
-            self._state = self._api.getDataMoto(self._id_name)
+            value = self._api.getDataMoto(self._id_name)
+            if self._id_name == "leftTime" and value is not None and value > 100:
+                # The API reports a bogus, very large value for the remaining
+                # charging time right after the scooter is plugged in.
+                _LOGGER.debug(
+                    "Ignoring implausible leftTime value of %s hours", value
+                )
+            else:
+                self._state = value
 
         elif self._sensor_grp == SENSOR_TYPE_POS:
             await self._hass.async_add_executor_job(self._api.updateMoto)
