@@ -11,7 +11,7 @@ from .api import NiuApi, NiuApiError
 
 _LOGGER = logging.getLogger(__name__)
 
-UPDATE_INTERVAL = timedelta(minutes=15)
+UPDATE_INTERVAL = timedelta(minutes=10)
 
 
 class NiuDataUpdateCoordinator(DataUpdateCoordinator[NiuApi]):
