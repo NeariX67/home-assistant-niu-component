@@ -1,82 +1,54 @@
-"""Remote wake up / unlock switch for Niu Integration integration."""
-from datetime import timedelta
+"""Remote wake-up switch for the Niu integration."""
+from __future__ import annotations
+
 import logging
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.util import Throttle
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import NiuApi
-from .const import *
+from .const import DOMAIN
+from .coordinator import NiuDataUpdateCoordinator
+from .entity import NiuEntity
+from .util import is_truthy_flag
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass, entry, async_add_entities) -> None:
-    niu_auth = entry.data.get(CONF_AUTH, None)
-    if niu_auth == None:
-        _LOGGER.error(
-            "The authenticator of your Niu integration is None.. can not setup the integration..."
-        )
-        return False
-
-    username = niu_auth[CONF_USERNAME]
-    password = niu_auth[CONF_PASSWORD]
-    scooter_id = niu_auth[CONF_SCOOTER_ID]
-
-    api = NiuApi.from_hass(hass, username, password, scooter_id)
-    await hass.async_add_executor_job(api.initApi)
-
-    async_add_entities([NiuWakeSwitch(hass, api)])
-    return True
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    coordinator: NiuDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities([NiuWakeSwitch(coordinator)])
 
 
-class NiuWakeSwitch(SwitchEntity):
+class NiuWakeSwitch(NiuEntity, SwitchEntity):
     """Remotely wakes up / unlocks the scooter (turn on) or powers it back down (turn off)."""
 
-    def __init__(self, hass, api: NiuApi) -> None:
-        self._unique_id = "switch.niu_scooter_" + api.sn + "_wake"
-        self._name = "NIU Scooter " + api.sensor_prefix + " Wake"
-        self._hass = hass
-        self._api = api
-        self._is_on = api.is_acc_on()
+    _attr_name = "Wake"
+    _attr_icon = "mdi:motorbike-electric"
 
-    @property
-    def unique_id(self):
-        return self._unique_id
+    def __init__(self, coordinator: NiuDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "wake")
+        self._update_from_data()
 
-    @property
-    def name(self):
-        return self._name
+    def _update_from_data(self) -> None:
+        self._attr_is_on = is_truthy_flag(self.api.data_moto.get("isAccOn"))
 
-    @property
-    def icon(self):
-        return "mdi:motorbike-electric"
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._update_from_data()
+        super()._handle_coordinator_update()
 
-    @property
-    def is_on(self):
-        return self._is_on
-
-    @property
-    def device_info(self):
-        device_name = "Niu E-scooter"
-        return {
-            "identifiers": {("niu", device_name)},
-            "name": device_name,
-            "manufacturer": "Niu",
-            "model": 1.0,
-        }
-
-    async def async_turn_on(self, **kwargs):
-        await self._hass.async_add_executor_job(self._api.wake_up)
-        self._is_on = True
+    async def async_turn_on(self, **kwargs) -> None:
+        await self.hass.async_add_executor_job(self.api.wake_up)
+        self._attr_is_on = True
         self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs):
-        await self._hass.async_add_executor_job(self._api.sleep)
-        self._is_on = False
+    async def async_turn_off(self, **kwargs) -> None:
+        await self.hass.async_add_executor_job(self.api.sleep)
+        self._attr_is_on = False
         self.async_write_ha_state()
-
-    @Throttle(timedelta(minutes=15))
-    async def async_update(self):
-        await self._hass.async_add_executor_job(self._api.updateMoto)
-        self._is_on = self._api.is_acc_on()
+        await self.coordinator.async_request_refresh()

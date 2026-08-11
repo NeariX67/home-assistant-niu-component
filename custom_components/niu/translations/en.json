@@ -14,11 +14,10 @@
                 "data": {
                     "username": "Username",
                     "password": "Password",
-                    "scooter_id": "Scooter id",
-                    "sensors_selected": "Select which sensor to integrate"
+                    "scooter_id": "Scooter id"
                 }
             }
         }
     },
-    "title": "Niu Integration"
+    "title": "Niu Scooters"
 }

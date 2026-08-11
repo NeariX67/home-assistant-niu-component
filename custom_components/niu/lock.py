@@ -1,87 +1,62 @@
-"""Remote anti-theft lock for Niu Integration integration."""
-from datetime import timedelta
+"""Remote anti-theft lock for the Niu integration."""
+from __future__ import annotations
+
 import logging
 
 from homeassistant.components.lock import LockEntity
-from homeassistant.util import Throttle
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import NiuApi
-from .const import *
+from .const import DOMAIN
+from .coordinator import NiuDataUpdateCoordinator
+from .entity import NiuEntity
+from .util import is_truthy_flag
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass, entry, async_add_entities) -> None:
-    niu_auth = entry.data.get(CONF_AUTH, None)
-    if niu_auth == None:
-        _LOGGER.error(
-            "The authenticator of your Niu integration is None.. can not setup the integration..."
-        )
-        return False
-
-    username = niu_auth[CONF_USERNAME]
-    password = niu_auth[CONF_PASSWORD]
-    scooter_id = niu_auth[CONF_SCOOTER_ID]
-
-    api = NiuApi.from_hass(hass, username, password, scooter_id)
-    await hass.async_add_executor_job(api.initApi)
-
-    async_add_entities([NiuFortificationLock(hass, api)])
-    return True
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    coordinator: NiuDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities([NiuFortificationLock(coordinator)])
 
 
-class NiuFortificationLock(LockEntity):
-    """Arms/disarms the scooter's anti-theft alarm (NIU calls this "fortification").
+class NiuFortificationLock(NiuEntity, LockEntity):
+    """Arms/disarms the scooter's anti-theft alarm (Niu calls this "fortification").
 
-    This is a different concept from the `lockStatus` field the `IsLocked` sensor
-    reports, which reflects the scooter's own electronic lock actuator rather than
-    the remote anti-theft alarm system.
+    This is a different concept from the `lockStatus` field the diagnostic
+    "Lock Status" sensor reports, which reflects the scooter's own electronic
+    lock actuator rather than the remote anti-theft alarm system.
     """
 
-    def __init__(self, hass, api: NiuApi) -> None:
-        self._unique_id = "lock.niu_scooter_" + api.sn + "_fortification"
-        self._name = "NIU Scooter " + api.sensor_prefix + " Lock"
-        self._hass = hass
-        self._api = api
-        self._is_locked = api.is_fortified()
+    _attr_name = "Anti-Theft Lock"
+
+    def __init__(self, coordinator: NiuDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "fortification")
+        self._update_from_data()
+
+    def _update_from_data(self) -> None:
+        self._attr_is_locked = is_truthy_flag(self.api.data_moto.get("isFortificationOn"))
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._update_from_data()
+        super()._handle_coordinator_update()
 
     @property
-    def unique_id(self):
-        return self._unique_id
+    def icon(self) -> str:
+        return "mdi:lock" if self.is_locked else "mdi:lock-open"
 
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def icon(self):
-        return "mdi:lock" if self._is_locked else "mdi:lock-open"
-
-    @property
-    def is_locked(self):
-        return self._is_locked
-
-    @property
-    def device_info(self):
-        device_name = "Niu E-scooter"
-        return {
-            "identifiers": {("niu", device_name)},
-            "name": device_name,
-            "manufacturer": "Niu",
-            "model": 1.0,
-        }
-
-    async def async_lock(self, **kwargs):
-        await self._hass.async_add_executor_job(self._api.lock)
-        self._is_locked = True
+    async def async_lock(self, **kwargs) -> None:
+        await self.hass.async_add_executor_job(self.api.lock)
+        self._attr_is_locked = True
         self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
-    async def async_unlock(self, **kwargs):
-        await self._hass.async_add_executor_job(self._api.unlock)
-        self._is_locked = False
+    async def async_unlock(self, **kwargs) -> None:
+        await self.hass.async_add_executor_job(self.api.unlock)
+        self._attr_is_locked = False
         self.async_write_ha_state()
-
-    @Throttle(timedelta(minutes=15))
-    async def async_update(self):
-        await self._hass.async_add_executor_job(self._api.updateMoto)
-        self._is_locked = self._api.is_fortified()
+        await self.coordinator.async_request_refresh()
