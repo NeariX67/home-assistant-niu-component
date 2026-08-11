@@ -3,6 +3,7 @@
   "name": "Niu Scooters",
   "after_dependencies": ["generic"],
   "codeowners": [
+    "@nearix67",
     "@mwestra",
     "@pikka97"
    ],
