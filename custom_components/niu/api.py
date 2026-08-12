@@ -9,6 +9,7 @@ import requests
 
 from .const import (
     ACCOUNT_BASE_URL,
+    ALIGN_API_URI,
     API_BASE_URL,
     BATTERY_COMPARTMENTS,
     CMD_ACC_OFF,
@@ -23,6 +24,7 @@ from .const import (
     MOTOR_INDEX_API_URI,
     TRACK_LIST_API_URI,
 )
+from .util import is_truthy_flag
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +51,7 @@ class NiuApi:
         self.dataMoto = None
         self.dataMotoInfo = None
         self.dataTrackInfo = None
+        self.dataAlign = None
 
     @classmethod
     def from_hass(cls, hass, username, password, scooter_id):
@@ -202,6 +205,31 @@ class NiuApi:
         """Disarm the scooter's anti-theft alarm (Niu calls this "fortification")."""
         return self.action(CMD_FORTIFICATION_OFF)
 
+    def post_align(self, fields: dict):
+        """POST a partial update to the vehicle-settings "align" endpoint (e.g. charging speed).
+
+        This is the same endpoint the Niu app uses to both read and write dozens of
+        vehicle settings. `db_cmd_type` is "1" here because, unlike the app, this
+        integration never has a live Bluetooth connection to the scooter to relay
+        the change through instead.
+        """
+        url = API_BASE_URL + ALIGN_API_URI
+        data = {"sn": self.sn, "db_cmd_type": "1", **fields}
+        try:
+            r = requests.post(url, headers=self._headers(), json=data)
+        except requests.RequestException:
+            return False
+        if r.status_code != 200:
+            return False
+        data = json.loads(r.content.decode())
+        if data["status"] != 0:
+            return False
+        return data
+
+    def set_charge_power(self, value: str):
+        """Set the charging-speed gear. `value` must be one of `charge_power_gears`' raw "power" values."""
+        return self.post_align({"charge_power_set_value": value})
+
     # -- Parsed data access -------------------------------------------------
 
     @property
@@ -225,6 +253,11 @@ class NiuApi:
         tracks = (self.dataTrackInfo or {}).get("data") or []
         return tracks[0] if tracks else {}
 
+    @property
+    def data_align(self) -> dict:
+        """Parsed data from the car_machine/align endpoint (vehicle settings, incl. charging speed)."""
+        return (self.dataAlign or {}).get("data") or {}
+
     def battery_compartments(self) -> list[str]:
         """Return the letters (A/B/C) of the battery compartments this scooter reports."""
         batteries = self.data_battery.get("batteries") or {}
@@ -242,6 +275,30 @@ class NiuApi:
     def is_fortified(self) -> bool:
         return self.data_moto.get("isFortificationOn") in (1, "1", True)
 
+    @property
+    def charge_power_gears(self) -> list[dict]:
+        """The scooter's selectable charging-speed gears, slowest first.
+
+        Each gear is a dict with a raw "power" value (what `set_charge_power`
+        expects back), plus "cur" (amps) and "left_time" (hours) for that gear.
+        Empty if this scooter doesn't expose discrete charging-speed gears.
+        """
+        charge_power = self.data_align.get("charge_power_set_value") or {}
+        return charge_power.get("power_gears") or []
+
+    @property
+    def charge_power_current(self) -> str | None:
+        """The raw "power" value of the currently selected charging-speed gear."""
+        charge_power = self.data_align.get("charge_power_set_value") or {}
+        return charge_power.get("set_value") or None
+
+    def supports_charge_power(self) -> bool:
+        """Whether this scooter supports selecting a charging-speed gear at all."""
+        return (
+            is_truthy_flag(self.data_align.get("sup_charge_power_set"))
+            and len(self.charge_power_gears) >= 2
+        )
+
     # -- Polling --------------------------------------------------------
 
     def updateBat(self):
@@ -256,6 +313,9 @@ class NiuApi:
     def updateTrackInfo(self):
         self.dataTrackInfo = self.post_info_track(TRACK_LIST_API_URI)
 
+    def updateAlign(self):
+        self.dataAlign = self.get_info(ALIGN_API_URI)
+
     def update_all(self):
         """Refresh every endpoint used by this integration in one pass."""
         self.updateBat()
@@ -264,3 +324,6 @@ class NiuApi:
         self.updateTrackInfo()
         if not (self.dataBat and self.dataMoto and self.dataMotoInfo and self.dataTrackInfo):
             raise NiuApiError("Niu API returned an incomplete response")
+        # Best-effort: not every scooter model exposes this endpoint, so a
+        # failure here shouldn't take down the rest of the integration.
+        self.updateAlign()

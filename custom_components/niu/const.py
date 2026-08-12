@@ -9,6 +9,7 @@ MOTOINFO_LIST_API_URI = "/v5/scooter/list"
 MOTOINFO_ALL_API_URI = "/motoinfo/overallTally"
 TRACK_LIST_API_URI = "/v5/track/list/v2"
 CMD_API_URI = "/v5/cmd/creat"
+ALIGN_API_URI = "/v5/scooter/car_machine/align"
 
 CMD_ACC_ON = "acc_on"
 CMD_ACC_OFF = "acc_off"
