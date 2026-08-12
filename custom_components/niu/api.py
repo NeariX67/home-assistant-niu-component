@@ -22,9 +22,10 @@ from .const import (
     MOTOINFO_LIST_API_URI,
     MOTOR_BATTERY_API_URI,
     MOTOR_INDEX_API_URI,
+    SOUND_API_URI,
     TRACK_LIST_API_URI,
 )
-from .util import is_truthy_flag
+from .util import as_int, is_truthy_flag
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class NiuApi:
         self.dataMotoInfo = None
         self.dataTrackInfo = None
         self.dataAlign = None
+        self.dataSound = None
 
     @classmethod
     def from_hass(cls, hass, username, password, scooter_id):
@@ -227,8 +229,31 @@ class NiuApi:
         return data
 
     def set_charge_power(self, value: str):
-        """Set the charging-speed gear. `value` must be one of `charge_power_gears`' raw "power" values."""
-        return self.post_align({"charge_power_set_value": value})
+        """Set the charging power. `value` must fall within `charge_power_range`."""
+        return self.post_align({"charge_power_set_value": str(value)})
+
+    def set_charging_limit(self, value: str):
+        """Set the charging-limit percentage. `value` must be one of "80"/"85"/"90"/"95"/"100"."""
+        return self.post_align({"charging_limit_value": str(value)})
+
+    def post_sound(self, fields: dict):
+        """POST a partial update to the vehicle sound/volume endpoint. See `post_align`."""
+        url = API_BASE_URL + SOUND_API_URI
+        data = {"sn": self.sn, "db_cmd_type": "1", **fields}
+        try:
+            r = requests.post(url, headers=self._headers(), json=data)
+        except requests.RequestException:
+            return False
+        if r.status_code != 200:
+            return False
+        data = json.loads(r.content.decode())
+        if data["status"] != 0:
+            return False
+        return data
+
+    def set_volume(self, value: int):
+        """Set the horn/alert volume level (0 to `sound_volume_max`)."""
+        return self.post_sound({"cur_sound_volume": str(value)})
 
     # -- Parsed data access -------------------------------------------------
 
@@ -258,6 +283,11 @@ class NiuApi:
         """Parsed data from the car_machine/align endpoint (vehicle settings, incl. charging speed)."""
         return (self.dataAlign or {}).get("data") or {}
 
+    @property
+    def data_sound(self) -> dict:
+        """Parsed data from the sound/theme endpoint (vehicle volume)."""
+        return (self.dataSound or {}).get("data") or {}
+
     def battery_compartments(self) -> list[str]:
         """Return the letters (A/B/C) of the battery compartments this scooter reports."""
         batteries = self.data_battery.get("batteries") or {}
@@ -276,28 +306,46 @@ class NiuApi:
         return self.data_moto.get("isFortificationOn") in (1, "1", True)
 
     @property
-    def charge_power_gears(self) -> list[dict]:
-        """The scooter's selectable charging-speed gears, slowest first.
+    def charge_power_range(self) -> list[str]:
+        """The [min, max] raw wattage range `set_charge_power` accepts, as strings.
 
-        Each gear is a dict with a raw "power" value (what `set_charge_power`
-        expects back), plus "cur" (amps) and "left_time" (hours) for that gear.
-        Empty if this scooter doesn't expose discrete charging-speed gears.
+        Empty if this scooter doesn't report a usable range.
         """
         charge_power = self.data_align.get("charge_power_set_value") or {}
-        return charge_power.get("power_gears") or []
+        values = charge_power.get("charge_power_range") or []
+        return values if len(values) == 2 else []
 
     @property
     def charge_power_current(self) -> str | None:
-        """The raw "power" value of the currently selected charging-speed gear."""
+        """The raw current charging-power setting (what `set_charge_power` expects back)."""
         charge_power = self.data_align.get("charge_power_set_value") or {}
         return charge_power.get("set_value") or None
 
     def supports_charge_power(self) -> bool:
-        """Whether this scooter supports selecting a charging-speed gear at all."""
+        """Whether this scooter supports setting a custom charging power at all."""
         return (
             is_truthy_flag(self.data_align.get("sup_charge_power_set"))
-            and len(self.charge_power_gears) >= 2
+            and len(self.charge_power_range) == 2
         )
+
+    @property
+    def charging_limit_current(self) -> str | None:
+        """The raw current charging-limit percentage (e.g. "100")."""
+        return self.data_align.get("charging_limit_value") or None
+
+    def supports_charging_limit(self) -> bool:
+        """Whether this scooter supports capping its charge limit percentage."""
+        return is_truthy_flag(self.data_align.get("sup_charging_limit"))
+
+    @property
+    def sound_volume_current(self) -> int | None:
+        """The scooter's current horn/alert volume level."""
+        return as_int(self.data_sound.get("cur_sound_volume"))
+
+    @property
+    def sound_volume_max(self) -> int | None:
+        """The maximum horn/alert volume level this scooter supports (range is 0 to this)."""
+        return as_int(self.data_sound.get("sup_sound_volume_max"))
 
     # -- Polling --------------------------------------------------------
 
@@ -316,6 +364,9 @@ class NiuApi:
     def updateAlign(self):
         self.dataAlign = self.get_info(ALIGN_API_URI)
 
+    def updateSound(self):
+        self.dataSound = self.get_info(SOUND_API_URI)
+
     def update_all(self):
         """Refresh every endpoint used by this integration in one pass."""
         self.updateBat()
@@ -324,6 +375,7 @@ class NiuApi:
         self.updateTrackInfo()
         if not (self.dataBat and self.dataMoto and self.dataMotoInfo and self.dataTrackInfo):
             raise NiuApiError("Niu API returned an incomplete response")
-        # Best-effort: not every scooter model exposes this endpoint, so a
+        # Best-effort: not every scooter model exposes these endpoints, so a
         # failure here shouldn't take down the rest of the integration.
         self.updateAlign()
+        self.updateSound()

@@ -13,7 +13,7 @@ from .coordinator import NiuDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["sensor", "binary_sensor", "device_tracker", "lock", "switch", "select", "camera"]
+PLATFORMS = ["sensor", "binary_sensor", "device_tracker", "lock", "switch", "select", "camera", "number"]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:

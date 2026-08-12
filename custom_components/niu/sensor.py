@@ -50,6 +50,11 @@ def _charging_time_left(api: NiuApi) -> float | None:
     return hours
 
 
+def _charge_power_range(api: NiuApi, index: int) -> str | None:
+    values = api.charge_power_range
+    return values[index] if values else None
+
+
 def _battery_sensors(compartment: str) -> list[NiuSensorEntityDescription]:
     """Build the sensor descriptions for one battery compartment (A/B/C)."""
     letter = compartment.lower()
@@ -169,6 +174,24 @@ SENSORS: tuple[NiuSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.HOURS,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda api: as_float(api.data_moto.get("charging_time")),
+    ),
+    NiuSensorEntityDescription(
+        key="charge_power_range_min",
+        name="Charging Power Range Min (raw)",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        icon="mdi:flash",
+        exists_fn=lambda api: api.supports_charge_power(),
+        value_fn=lambda api: _charge_power_range(api, 0),
+    ),
+    NiuSensorEntityDescription(
+        key="charge_power_range_max",
+        name="Charging Power Range Max (raw)",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        icon="mdi:flash",
+        exists_fn=lambda api: api.supports_charge_power(),
+        value_fn=lambda api: _charge_power_range(api, 1),
     ),
     NiuSensorEntityDescription(
         key="central_control_battery",
