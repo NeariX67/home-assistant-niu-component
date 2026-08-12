@@ -21,6 +21,14 @@ Now this integration is _asynchronous_ and it is easy installable via config flo
 
 With the thanks to pikka97 !!!
 
+## Installing via HACS
+
+This is a fork, so it won't turn up in HACS's default search — add it as a custom repository instead:
+1. In Home Assistant, open **HACS**, click the **⋮** menu (top right), and choose **Custom repositories**.
+2. Add `https://github.com/NeariX67/home-assistant-niu-component` as the repository, with type **Integration**.
+3. Find "Niu Scooters" in HACS and click **Download**.
+4. Restart Home Assistant, then continue with Setup below.
+
 ## Setup
 1. In Home Assistant's settings under "device and services" click on the "Add integration" button.
 2. Search for "Niu Scooters" and click on it.
