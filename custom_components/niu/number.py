@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
+from homeassistant.const import EntityCategory, UnitOfPower
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -29,16 +29,13 @@ async def async_setup_entry(
 
 
 class NiuChargePowerNumber(NiuEntity, NumberEntity):
-    """Sets the scooter's charging power to any value within its reported range.
-
-    The API field is literally named "power" with no confirmed unit; it's
-    presumably Watts (see `charge_power_range`/`set_charge_power`) but this
-    isn't confirmed against the app's own UI.
-    """
+    """Sets the scooter's charging power to any value within its reported range."""
 
     _attr_name = "Charging Power"
     _attr_icon = "mdi:ev-station"
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_class = NumberDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_native_step = 1
     _attr_mode = NumberMode.BOX
 

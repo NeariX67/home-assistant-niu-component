@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 # Confirmed from the Niu app's own UI; the align endpoint doesn't enumerate these.
-CHARGE_LIMIT_OPTIONS = ("80", "85", "90", "95", "100")
+CHARGE_LIMIT_VALUES = ("80", "85", "90", "95", "100")
 
 
 async def async_setup_entry(
@@ -34,14 +34,16 @@ class NiuChargeLimitSelect(NiuEntity, SelectEntity):
     _attr_name = "Charging Limit"
     _attr_icon = "mdi:battery-charging-high"
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_options = list(CHARGE_LIMIT_OPTIONS)
+    # SelectEntity has no native_unit_of_measurement; fold the "%" into the options themselves.
+    _attr_options = [f"{value}%" for value in CHARGE_LIMIT_VALUES]
 
     def __init__(self, coordinator: NiuDataUpdateCoordinator) -> None:
         super().__init__(coordinator, "charging_limit")
         self._update_from_data()
 
     def _update_from_data(self) -> None:
-        self._attr_current_option = self.api.charging_limit_current
+        current = self.api.charging_limit_current
+        self._attr_current_option = f"{current}%" if current else None
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -49,7 +51,8 @@ class NiuChargeLimitSelect(NiuEntity, SelectEntity):
         super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
-        await self.hass.async_add_executor_job(self.api.set_charging_limit, option)
+        value = option.removesuffix("%")
+        await self.hass.async_add_executor_job(self.api.set_charging_limit, value)
         self._attr_current_option = option
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
