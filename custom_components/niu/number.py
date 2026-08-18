@@ -45,9 +45,14 @@ class NiuChargePowerNumber(NiuEntity, NumberEntity):
 
     def _update_from_data(self) -> None:
         charge_power_range = self.api.charge_power_range
+        # No range reported (e.g. not currently charging on some scooters): fall
+        # back to 0/0 instead of leaving the entity without valid bounds.
         if charge_power_range:
             self._attr_native_min_value = float(charge_power_range[0])
             self._attr_native_max_value = float(charge_power_range[1])
+        else:
+            self._attr_native_min_value = 0
+            self._attr_native_max_value = 0
         current = self.api.charge_power_current
         self._attr_native_value = float(current) if current else None
 

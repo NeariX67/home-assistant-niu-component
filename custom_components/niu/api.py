@@ -322,11 +322,12 @@ class NiuApi:
         return charge_power.get("set_value") or None
 
     def supports_charge_power(self) -> bool:
-        """Whether this scooter supports setting a custom charging power at all."""
-        return (
-            is_truthy_flag(self.data_align.get("sup_charge_power_set"))
-            and len(self.charge_power_range) == 2
-        )
+        """Whether this scooter supports setting a custom charging power at all.
+
+        This is the stable capability flag, independent of `charge_power_range`,
+        which some scooters only populate while actually plugged in and charging.
+        """
+        return is_truthy_flag(self.data_align.get("sup_charge_power_set"))
 
     @property
     def charging_limit_current(self) -> str | None:
