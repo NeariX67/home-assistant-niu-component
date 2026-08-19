@@ -1,6 +1,7 @@
 """Sensor platform for the Niu integration."""
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -54,6 +55,17 @@ def _charging_time_left(api: NiuApi) -> float | None:
 def _charge_power_range(api: NiuApi, index: int) -> str | None:
     values = api.charge_power_range
     return values[index] if values else None
+
+
+def _battery_soc_average(api: NiuApi) -> int | None:
+    """Average state of charge across all battery compartments, rounded down."""
+    charges = [
+        as_float(api.battery(c).get("batteryCharging")) for c in api.battery_compartments()
+    ]
+    charges = [c for c in charges if c is not None]
+    if not charges:
+        return None
+    return math.floor(sum(charges) / len(charges))
 
 
 def _battery_sensors(compartment: str) -> list[NiuSensorEntityDescription]:
@@ -203,6 +215,15 @@ SENSORS: tuple[NiuSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda api: as_float(api.data_moto.get("centreCtrlBattery")),
+    ),
+    NiuSensorEntityDescription(
+        key="battery_soc_average",
+        name="Battery SOC",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        exists_fn=lambda api: bool(api.battery_compartments()),
+        value_fn=_battery_soc_average,
     ),
     NiuSensorEntityDescription(
         key="lock_status",
